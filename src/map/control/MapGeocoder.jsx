@@ -39,7 +39,20 @@ const useStyles = makeStyles()((theme) => ({
   results: {
     overflowY: 'auto',
   },
+  w3wBadge: {
+    color: '#e11f26',
+    fontWeight: 700,
+    marginRight: theme.spacing(0.5),
+  },
 }));
+
+/** Detecta si la cadena es una dirección What3Words (///a.b.c o a.b.c) */
+const isW3WQuery = (q) => {
+  const trimmed = q.trim();
+  if (trimmed.startsWith('///')) return true;
+  // Exactamente tres palabras separadas por puntos, sin espacios ni slashes
+  return /^[^.\s/]+\.[^.\s/]+\.[^.\s/]+$/.test(trimmed);
+};
 
 const MapGeocoder = () => {
   const theme = useTheme();
@@ -55,15 +68,50 @@ const MapGeocoder = () => {
     if (!query.trim()) {
       setResults([]);
       setLoading(false);
+      return;
     }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(async () => {
       setLoading(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=geojson&addressdetails=1`;
-        const response = await fetch(url, { signal: controller.signal });
-        const data = await response.json();
-        setResults(data.features || []);
+        if (isW3WQuery(query)) {
+          /* ── What3Words → coordenadas via backend Traccar ── */
+          const response = await fetch(
+            `/api/geocoder/w3w?q=${encodeURIComponent(query.trim())}`,
+            { signal: controller.signal },
+          );
+          const data = await response.json();
+
+          if (data.error) {
+            dispatch(errorsActions.push(`What3Words: ${data.error}`));
+            setResults([]);
+          } else {
+            // Crear un bbox pequeño alrededor del punto (~110 m) para fitBounds
+            const delta = 0.001;
+            setResults([{
+              isW3W: true,
+              properties: {
+                place_id: `w3w_${data.words}`,
+                display_name: `///${data.words}`,
+                w3w_near: data.nearestPlace || '',
+                w3w_country: data.country || '',
+              },
+              bbox: [
+                data.lng - delta,
+                data.lat - delta,
+                data.lng + delta,
+                data.lat + delta,
+              ],
+            }]);
+          }
+        } else {
+          /* ── Búsqueda normal con Nominatim ── */
+          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=geojson&addressdetails=1`;
+          const response = await fetch(url, { signal: controller.signal });
+          const data = await response.json();
+          setResults(data.features || []);
+        }
       } catch (e) {
         if (e.name !== 'AbortError') {
           dispatch(errorsActions.push(e.message));
@@ -72,6 +120,7 @@ const MapGeocoder = () => {
         setLoading(false);
       }
     }, 300);
+
     return () => {
       controller.abort();
       clearTimeout(timeoutId);
@@ -105,7 +154,10 @@ const MapGeocoder = () => {
 
   const onSelect = (feature) => {
     const [minX, minY, maxX, maxY] = feature.bbox;
-    map.fitBounds([toMapCoordinates(minX, minY), toMapCoordinates(maxX, maxY)], { padding: 40 });
+    map.fitBounds(
+      [toMapCoordinates(minX, minY), toMapCoordinates(maxX, maxY)],
+      { padding: 40 },
+    );
     setAnchorEl(null);
     setQuery('');
     setResults([]);
@@ -125,7 +177,7 @@ const MapGeocoder = () => {
             autoFocus
             fullWidth
             size="small"
-            placeholder={t('sharedSearch')}
+            placeholder={`${t('sharedSearch')}  ·  ///palabra.palabra.palabra`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -138,8 +190,27 @@ const MapGeocoder = () => {
                 </ListItemButton>
               ))
             : results.map((feature) => (
-                <ListItemButton key={feature.properties.place_id} onClick={() => onSelect(feature)}>
-                  <ListItemText primary={feature.properties.display_name} />
+                <ListItemButton
+                  key={feature.properties.place_id}
+                  onClick={() => onSelect(feature)}
+                >
+                  {feature.isW3W ? (
+                    <ListItemText
+                      primary={
+                        <>
+                          <span className={classes.w3wBadge}>///</span>
+                          {feature.properties.display_name.replace('///', '')}
+                        </>
+                      }
+                      secondary={
+                        feature.properties.w3w_near
+                          ? `${feature.properties.w3w_near}${feature.properties.w3w_country ? ` · ${feature.properties.w3w_country}` : ''}`
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <ListItemText primary={feature.properties.display_name} />
+                  )}
                 </ListItemButton>
               ))}
         </List>
