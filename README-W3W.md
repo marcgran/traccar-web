@@ -61,7 +61,7 @@ Key changes:
 ## Requirements
 
 > ⚠️ **A paid What3Words API plan is required.**  
-> The free tier quota is exhausted almost immediately with a real GPS tracker.  
+> The free tier does not include the `convert-to-3wa` endpoint (coordinates → words) needed for reverse geocoding.  
 > See the [backend README](https://github.com/marcgran/traccar/blob/master/README-W3W.md#api-key) for details.
 
 This frontend fork requires the backend fork to be installed and running:  
