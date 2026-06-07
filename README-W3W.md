@@ -58,10 +58,14 @@ Key changes:
 
 ---
 
-## Setup
+## Requirements
+
+> ⚠️ **A paid What3Words API plan is required.**  
+> The free tier quota is exhausted almost immediately with a real GPS tracker.  
+> See the [backend README](https://github.com/marcgran/traccar/blob/master/README-W3W.md#api-key) for details.
 
 This frontend fork requires the backend fork to be installed and running:  
-👉 **[marcgran/traccar — feature/what3words-integration](https://github.com/marcgran/traccar/tree/feature/what3words-integration)**
+👉 **[marcgran/traccar — backend](https://github.com/marcgran/traccar/blob/master/README-W3W.md)**
 
 The backend provides the `/api/geocoder/w3w` endpoint that this frontend calls.
 
